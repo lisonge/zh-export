@@ -4,7 +4,7 @@ import t from '@babel/types';
 import { transform } from 'esbuild';
 import fs from 'node:fs/promises';
 import { compileTemplate, parse } from 'vue/compiler-sfc';
-import { traverseDirectory } from './utils';
+import { posixPath, traverseDirectory } from './utils';
 import buffer from 'node:buffer';
 import path from 'node:path';
 
@@ -90,7 +90,7 @@ const getCodesFromFile = async (
           hoistStatic: false,
         },
       });
-      codes.push(r.code);
+      codes.push(await transformWithEsbuild(r.code, 'ts'));
     }
   } else {
     codes.push(await transformWithEsbuild(text, ext));
@@ -126,20 +126,20 @@ const pickZhStrByAst = (code: string): string[] => {
     }
   };
   fixTraverse(program, {
-    StringLiteral(path) {
-      const node = path.node;
+    StringLiteral(p) {
+      const node = p.node;
       if (hasUsedSet(node)) return;
       pushUsed(node);
       zhStrSet.add(node.value.trim());
     },
-    TemplateLiteral(path) {
-      const node = path.node;
+    TemplateLiteral(p) {
+      const node = p.node;
       if (hasUsedSet(node)) return;
       pushUsed(node);
       zhStrSet.add(node.quasis.map((v) => v.value.raw.trim()).join('{}'));
     },
-    BinaryExpression(path) {
-      const node = path.node;
+    BinaryExpression(p) {
+      const node = p.node;
       if (hasUsedSet(node)) return;
       pushUsed(node);
       if (!node.start || !node.end) {
@@ -174,7 +174,7 @@ const pickZhStrByAst = (code: string): string[] => {
 };
 const rmREg = /(^\{\})|(\{\}$)/;
 
-const getStrHashode = (str: string) => {
+const getStrHashCode = (str: string) => {
   let hash = 0,
     i,
     char;
@@ -188,7 +188,7 @@ const getStrHashode = (str: string) => {
 };
 
 const getKeyFromStr = (str: string): string => {
-  const code = getStrHashode(str);
+  const code = getStrHashCode(str);
   const a = buffer.Buffer.from(new Int32Array([code]).buffer)
     .toString('base64url')
     .replaceAll('-', '_');
@@ -198,15 +198,23 @@ const getKeyFromStr = (str: string): string => {
   return a;
 };
 
+const excludeSubFolderList = [
+  'node_modules',
+  'dist',
+  'build',
+  'public',
+  'test',
+  'tests',
+  'scripts',
+  '.git',
+  '.vscode',
+  '.idea',
+];
 const collectDirZhStr = async (dir: string) => {
   const textList: { name: string; data: Record<string, string> }[] = [];
   for await (const filePath of traverseDirectory(dir, (p) => {
-    const baseName = p.split(/[\\\/]/).at(-1);
-    return (
-      baseName !== 'node_modules' &&
-      baseName !== 'dist' &&
-      baseName !== 'public'
-    );
+    const baseName = path.basename(p);
+    return !excludeSubFolderList.includes(baseName);
   })) {
     const ext = fileExtList.find(
       (v) => filePath.endsWith(v) && filePath.at(-v.length - 1) === '.'
@@ -219,7 +227,7 @@ const collectDirZhStr = async (dir: string) => {
     );
     if (!zhStrList.length) continue;
     textList.push({
-      name: filePath.substring(dir.length + 1).replaceAll(/\\/g, '/'),
+      name: filePath.substring(dir.length + 1),
       data: Object.fromEntries(zhStrList.map((v) => [getKeyFromStr(v), v])),
     });
   }
@@ -235,14 +243,17 @@ const collectDirZhStr = async (dir: string) => {
     'utf-8'
   );
   console.log(dir);
-  console.log(`pick file count: ${textList.length}\n`);
+  console.log(`pick file count: ${textList.length}`);
+  const wordCount = new Set(textList.flatMap((v) => Object.values(v.data)))
+    .size;
+  console.log(`pick word count: ${wordCount}\n`);
 };
 
 const folderList = (
   await fs.readFile(process.cwd() + '/folder.txt', 'utf-8').catch(() => '')
 )
   .split('\n')
-  .map((v) => v.trim())
+  .map((v) => posixPath(v.trim()))
   .filter(Boolean);
 
 if (folderList.length === 0) {
