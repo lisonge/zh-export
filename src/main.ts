@@ -28,8 +28,10 @@ const transformWithEsbuild = async (
   code: string,
   ext?: (typeof codeExtList)[number]
 ) => {
+  ext ??= 'js';
+  const loader = ext === 'js' ? 'jsx' : ext;
   const r = await transform(code, {
-    loader: ext ?? 'js',
+    loader,
     minify: true,
     minifySyntax: false,
     minifyIdentifiers: false,
