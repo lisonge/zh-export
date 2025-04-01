@@ -24,13 +24,16 @@ const hasZhStr = (str: string): boolean => {
   return false;
 };
 
+await fs.unlink(process.cwd() + '/error.log').catch(() => {});
+
 const transformWithEsbuild = async (
+  filePath: string,
   code: string,
-  ext?: (typeof codeExtList)[number]
+  ext: (typeof codeExtList)[number] | undefined
 ) => {
   ext ??= 'js';
   const loader = ext === 'js' ? 'jsx' : ext;
-  const r = await transform(code, {
+  const text = await transform(code, {
     loader,
     minify: true,
     minifySyntax: false,
@@ -49,8 +52,26 @@ const transformWithEsbuild = async (
         verbatimModuleSyntax: true,
       },
     },
-  });
-  return r.code;
+  })
+    .then((r) => r.code)
+    .catch(async (e: Error) => {
+      await fs.writeFile(
+        process.cwd() + '/error.log',
+        [
+          'esbuild transform error',
+          filePath,
+          e.message,
+          code,
+          '\n'.repeat(4),
+        ].join('\n'),
+        { encoding: 'utf-8', flag: 'a' }
+      );
+      console.error(
+        ['esbuild transform error', filePath, e.message, ''].join('\n')
+      );
+      return '';
+    });
+  return text;
 };
 
 const getCodesFromFile = async (
@@ -68,6 +89,7 @@ const getCodesFromFile = async (
     if (script) {
       codes.push(
         await transformWithEsbuild(
+          filePath,
           script.content,
           preCodeExtList.find((v) => v === script.lang)
         )
@@ -76,6 +98,7 @@ const getCodesFromFile = async (
     if (scriptSetup) {
       codes.push(
         await transformWithEsbuild(
+          filePath,
           scriptSetup.content,
           preCodeExtList.find((v) => v === scriptSetup.lang)
         )
@@ -92,10 +115,10 @@ const getCodesFromFile = async (
           hoistStatic: false,
         },
       });
-      codes.push(await transformWithEsbuild(r.code, 'ts'));
+      codes.push(await transformWithEsbuild(filePath, r.code, 'ts'));
     }
   } else {
-    codes.push(await transformWithEsbuild(text, ext));
+    codes.push(await transformWithEsbuild(filePath, text, ext));
   }
   return codes.filter((v) => hasZhStr(v));
 };
