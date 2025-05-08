@@ -139,6 +139,7 @@ const flatBinaryExpression = (
 const pickZhStrByAst = (code: string): string[] => {
   const program = parser.parse(code, {
     sourceType: 'module',
+    plugins: ['decorators'],
   });
   const zhStrSet = new Set<string>();
   const usedNodes: t.Node[] = [];
