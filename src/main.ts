@@ -3,11 +3,11 @@ import traverse from '@babel/traverse';
 import t from '@babel/types';
 import { transform } from 'esbuild';
 import { JSDOM } from 'jsdom';
-import buffer from 'node:buffer';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { compileTemplate, parse } from 'vue/compiler-sfc';
 import { posixPath, traverseDirectory } from './utils';
+import { getKeyFromStr } from './key';
 
 const domParser = new new JSDOM().window.DOMParser();
 const getAllTextNodes = (body: HTMLElement): ChildNode[] => {
@@ -228,30 +228,6 @@ const pickZhStrByAst = (code: string): string[] => {
     .filter(Boolean);
 };
 const rmREg = /(^\{\})|(\{\}$)/;
-
-const getStrHashCode = (str: string) => {
-  let hash = 0,
-    i,
-    char;
-  if (str.length === 0) return hash;
-  for (i = 0; i < str.length; i++) {
-    char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0;
-  }
-  return hash;
-};
-
-const getKeyFromStr = (str: string): string => {
-  const code = getStrHashCode(str);
-  const a = buffer.Buffer.from(new Int32Array([code]).buffer)
-    .toString('base64url')
-    .replaceAll('-', '_');
-  if (Number.isInteger(Number(a[0]))) {
-    return '_' + a;
-  }
-  return a;
-};
 
 const excludeSubFolderList = [
   'node_modules',
