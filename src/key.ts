@@ -13,7 +13,7 @@ const getStrHashCode = (str: string) => {
   return hash;
 };
 
-export const getKeyFromStr = (str: string): string => {
+const getKeyFromStr = (str: string): string => {
   const code = getStrHashCode(str);
   const a = buffer.Buffer.from(new Int32Array([code]).buffer)
     .toString('base64url')
@@ -23,3 +23,5 @@ export const getKeyFromStr = (str: string): string => {
   }
   return a;
 };
+
+export default getKeyFromStr;

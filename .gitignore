@@ -41,3 +41,4 @@ auto-import-components.d.ts
 .eslintcache
 
 /folder.txt
+/src/key-ext.ts

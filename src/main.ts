@@ -7,7 +7,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { compileTemplate, parse } from 'vue/compiler-sfc';
 import { posixPath, traverseDirectory } from './utils';
-import { getKeyFromStr } from './key';
+import type getKeyFromStrT from './key';
+
+const keyExtPath = './key-ext.ts';
+const getKeyFromStr: typeof getKeyFromStrT = await import(keyExtPath)
+  .catch(() => import('./key'))
+  .then((v) => v.default);
 
 const domParser = new new JSDOM().window.DOMParser();
 const getAllTextNodes = (body: HTMLElement): ChildNode[] => {
