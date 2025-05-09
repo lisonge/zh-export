@@ -2,11 +2,40 @@ import parser from '@babel/parser';
 import traverse from '@babel/traverse';
 import t from '@babel/types';
 import { transform } from 'esbuild';
+import { JSDOM } from 'jsdom';
+import buffer from 'node:buffer';
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { compileTemplate, parse } from 'vue/compiler-sfc';
 import { posixPath, traverseDirectory } from './utils';
-import buffer from 'node:buffer';
-import path from 'node:path';
+
+const domParser = new new JSDOM().window.DOMParser();
+const getAllTextNodes = (body: HTMLElement): ChildNode[] => {
+  const stack: ChildNode[] = Array.from(body.childNodes);
+  const textNodes: ChildNode[] = [];
+  while (stack.length) {
+    const node = stack.pop()!;
+    if (node.childNodes.length === 0) {
+      textNodes.push(node);
+    } else {
+      stack.push(...Array.from(node.childNodes));
+    }
+  }
+  return textNodes;
+};
+const htmlRegList = [/^\<[a-zA-Z]+\b/, /\<\/[a-zA-Z]+\>$/];
+const pureHtmlText = (html: string): string[] | string => {
+  if (htmlRegList.every((r) => !r.test(html))) return html;
+  try {
+    const doc = domParser.parseFromString(html, 'text/html');
+    const textList = getAllTextNodes(doc.body)
+      .map((v) => (v.textContent || '').trim())
+      .filter((v) => v && zhReg.test(v));
+    return textList;
+  } catch {
+    return html;
+  }
+};
 
 const fixTraverse: typeof traverse =
   typeof traverse === 'function' ? traverse : Reflect.get(traverse, 'default');
@@ -254,7 +283,12 @@ const collectDirZhStr = async (dir: string) => {
     if (!zhStrList.length) continue;
     textList.push({
       name: filePath.substring(dir.length + 1),
-      data: Object.fromEntries(zhStrList.map((v) => [getKeyFromStr(v), v])),
+      data: Object.fromEntries(
+        zhStrList
+          .map((v) => pureHtmlText(v))
+          .flat()
+          .map((v) => [getKeyFromStr(v), v])
+      ),
     });
   }
 
